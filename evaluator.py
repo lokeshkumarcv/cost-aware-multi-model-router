@@ -1,299 +1,388 @@
-import json
-import os
-import time
-
-from dotenv import load_dotenv
-from groq import Groq
-
+import re
 from router import route_request
-
-
-load_dotenv()
-
-client = Groq(
-    api_key=os.getenv("GROQ_API_KEY")
-)
-
-JUDGE_MODEL = "openai/gpt-oss-20b"
-MAX_RETRIES = 2
-RETRY_DELAY = 2
 
 
 TEST_CASES = [
     {
         "id": 1,
         "question": "What is the capital of India?",
-        "expected": "New Delhi"
+        "concepts": ["new delhi"]
     },
     {
         "id": 2,
         "question": "What is 15 multiplied by 8?",
-        "expected": "120"
+        "concepts": ["120"]
     },
     {
         "id": 3,
         "question": "What is the largest planet in our solar system?",
-        "expected": "Jupiter"
+        "concepts": ["jupiter"]
     },
     {
         "id": 4,
         "question": "What does CPU stand for?",
-        "expected": "Central Processing Unit"
+        "concepts": ["central processing unit"]
     },
     {
         "id": 5,
         "question": "What is the chemical formula for water?",
-        "expected": "H2O"
+        "concepts": ["h2o"]
     },
     {
         "id": 6,
         "question": "What is a database?",
-        "expected": "An organized collection of data"
+        "concepts": [
+            "organized collection",
+            "data"
+        ]
     },
     {
         "id": 7,
         "question": "What is the primary purpose of an operating system?",
-        "expected": "To manage computer hardware and software resources"
+        "concepts": [
+            "manage hardware",
+            "manage software",
+            "resources"
+        ]
     },
     {
         "id": 8,
         "question": (
-            "Explain the difference between supervised and "
-            "unsupervised machine learning with one example of each."
+            "What is the difference between supervised and "
+            "unsupervised machine learning?"
         ),
-        "expected": (
-            "Supervised learning uses labeled data to learn a "
-            "mapping between inputs and outputs. Unsupervised "
-            "learning uses unlabeled data to discover patterns. "
-            "Classification is supervised and clustering is unsupervised."
-        )
+        "concepts": [
+            "labeled data",
+            "unlabeled data",
+            "supervised learning",
+            "unsupervised learning"
+        ]
     },
     {
         "id": 9,
         "question": (
-            "What is overfitting in machine learning and what "
-            "are three common ways to reduce it?"
+            "What is overfitting in machine learning and "
+            "how can it be reduced?"
         ),
-        "expected": (
-            "Overfitting occurs when a model learns training data "
-            "too closely and performs poorly on unseen data. "
-            "Regularization, cross-validation, early stopping, "
-            "dropout and additional training data can reduce it."
-        )
+        "concepts": [
+            "training data",
+            "unseen data",
+            "regularization",
+            "cross validation"
+        ]
     },
     {
         "id": 10,
         "question": (
             "Explain the difference between precision and recall "
-            "and give an example where recall is more important."
+            "and give a situation where recall is more important."
         ),
-        "expected": (
-            "Precision measures how many predicted positives are "
-            "actually positive. Recall measures how many actual "
-            "positives are identified. Recall is more important "
-            "when missing a positive case is costly."
-        )
+        "concepts": [
+            "precision",
+            "recall",
+            "positive predictions",
+            "actual positives",
+            "missing a positive"
+        ]
     },
     {
         "id": 11,
         "question": (
-            "Compare SQL and NoSQL databases and explain one "
-            "situation where each would be appropriate."
+            "Compare SQL and NoSQL databases and explain when "
+            "each would be appropriate."
         ),
-        "expected": (
-            "SQL databases use structured schemas and are suitable "
-            "for relational data and transactions. NoSQL databases "
-            "provide flexible data models and are useful for scalable "
-            "or rapidly changing data."
-        )
+        "concepts": [
+            "relational",
+            "structured",
+            "flexible schema",
+            "scalable"
+        ]
     },
     {
         "id": 12,
         "question": (
             "Explain horizontal scaling and vertical scaling "
-            "and describe the main difference."
+            "and describe their main difference."
         ),
-        "expected": (
-            "Vertical scaling increases resources of an existing "
-            "machine. Horizontal scaling adds more machines or "
-            "instances."
-        )
+        "concepts": [
+            "vertical scaling",
+            "horizontal scaling",
+            "increase resources",
+            "multiple machines"
+        ]
     },
     {
         "id": 13,
         "question": (
-            "Design a scalable e-commerce architecture for millions "
-            "of users. Explain API gateway, microservices, databases, "
-            "caching, message queues, load balancing, authentication, "
-            "fault tolerance and horizontal scaling."
+            "Explain how caching can improve the performance "
+            "of a web application."
         ),
-        "expected": (
-            "Use an API gateway, independently scalable services, "
-            "load balancing, caching, scalable databases, asynchronous "
-            "messaging, authentication, authorization, monitoring "
-            "and fault tolerance."
-        )
+        "concepts": [
+            "cache",
+            "frequently accessed",
+            "faster response",
+            "reduce database requests"
+        ]
     },
     {
         "id": 14,
         "question": (
-            "Design a real-time fraud detection system for a financial "
-            "platform processing millions of transactions per hour."
+            "Explain the role of a load balancer in a distributed "
+            "application."
         ),
-        "expected": (
-            "Use real-time event streaming, feature engineering, "
-            "low-latency model serving, transaction scoring, monitoring "
-            "and periodic model retraining."
-        )
+        "concepts": [
+            "distribute traffic",
+            "multiple servers",
+            "availability",
+            "scalability"
+        ]
     },
     {
         "id": 15,
         "question": (
-            "Design a globally distributed application that remains "
-            "available if an entire geographic region fails."
+            "Design a scalable e-commerce architecture for millions "
+            "of users. Explain the major components required."
         ),
-        "expected": (
-            "Use multiple geographic regions, replicated data, global "
-            "load balancing, automated failover, health checks, disaster "
-            "recovery and monitoring."
-        )
+        "concepts": [
+            "api gateway",
+            "load balancing",
+            "caching",
+            "database",
+            "message queue",
+            "authentication",
+            "monitoring"
+        ]
     },
     {
         "id": 16,
         "question": (
-            "Design a highly available payment processing system. "
-            "Explain consistency, idempotency, retries, replication "
-            "and failure recovery."
+            "Design a real-time fraud detection system for a financial "
+            "platform processing millions of transactions per hour."
         ),
-        "expected": (
-            "Use strong transaction guarantees where required, "
-            "idempotency keys, safe retries, database replication, "
-            "failure recovery, monitoring and disaster recovery."
-        )
+        "concepts": [
+            "event streaming",
+            "feature processing",
+            "machine learning model",
+            "real time",
+            "transaction scoring",
+            "monitoring",
+            "model retraining"
+        ]
     },
     {
         "id": 17,
         "question": (
-            "Design a machine learning pipeline for predicting "
-            "customer churn at a large company."
+            "Design a globally distributed application that remains "
+            "available if an entire geographic region fails."
         ),
-        "expected": (
-            "Collect and validate data, preprocess it, engineer "
-            "features, train and compare models, validate performance, "
-            "deploy, monitor and retrain when necessary."
-        )
+        "concepts": [
+            "multiple regions",
+            "replicated data",
+            "global load balancing",
+            "failover",
+            "health checks",
+            "disaster recovery",
+            "monitoring"
+        ]
     },
     {
         "id": 18,
         "question": (
-            "Design a distributed system capable of processing "
-            "one million events per second."
+            "Design a highly available payment processing system. "
+            "Explain consistency, idempotency, retries, replication, "
+            "and failure recovery."
         ),
-        "expected": (
-            "Use partitioning, replication, distributed message "
-            "queues, ordering guarantees, fault tolerance, "
-            "backpressure and horizontal scaling."
-        )
+        "concepts": [
+            "consistency",
+            "idempotency",
+            "retries",
+            "database replication",
+            "failure recovery",
+            "monitoring"
+        ]
     },
     {
         "id": 19,
         "question": (
-            "Design a recommendation system for an e-commerce "
-            "platform with millions of users."
+            "Design a distributed system capable of processing "
+            "one million events per second."
         ),
-        "expected": (
-            "Use candidate generation followed by ranking, user "
-            "and item features, cold-start strategies, scalable "
-            "model serving, offline metrics and online evaluation."
-        )
+        "concepts": [
+            "partitioning",
+            "replication",
+            "message queue",
+            "fault tolerance",
+            "backpressure",
+            "horizontal scaling"
+        ]
     },
     {
         "id": 20,
         "question": (
-            "Design a fault-tolerant microservices architecture "
-            "for a large online food delivery platform."
+            "Design a fault-tolerant microservices architecture for "
+            "a large online food delivery platform."
         ),
-        "expected": (
-            "Use an API gateway, service discovery, independent "
-            "services, suitable databases, caching, asynchronous "
-            "messaging, observability, retries, circuit breakers, "
-            "authentication, authorization and disaster recovery."
-        )
+        "concepts": [
+            "api gateway",
+            "service discovery",
+            "microservices",
+            "database",
+            "caching",
+            "message queue",
+            "monitoring",
+            "fault tolerance"
+        ]
     }
 ]
 
 
-def judge_answer(question, expected, answer):
+def normalize_text(text):
+    text = str(text).lower()
 
-    prompt = f"""
-Evaluate the AI answer.
+    text = text.replace("-", " ")
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    text = re.sub(r"\s+", " ", text)
 
-Question:
-{question}
+    return text.strip()
 
-Expected:
-{expected}
 
-Answer:
-{answer}
+def concept_found(answer, concept):
+    answer = normalize_text(answer)
+    concept = normalize_text(concept)
 
-Return only JSON:
+    if concept in answer:
+        return True
 
-{{
-    "correct": true,
-    "score": 1.0
-}}
+    words = concept.split()
 
-Score from 0.0 to 1.0.
-"""
+    if len(words) == 1:
+        return False
 
-    for attempt in range(MAX_RETRIES + 1):
+    return all(
+        word in answer
+        for word in words
+    )
 
-        try:
 
-            response = client.chat.completions.create(
-                model=JUDGE_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Return only valid JSON."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=0,
-                max_tokens=100
-            )
+def calculate_score(answer, concepts):
+    if not concepts:
+        return 0.0, 0, 0
 
-            text = response.choices[0].message.content.strip()
+    matched = sum(
+        concept_found(answer, concept)
+        for concept in concepts
+    )
 
-            text = (
-                text
-                .replace("```json", "")
-                .replace("```", "")
-                .strip()
-            )
+    total = len(concepts)
 
-            return json.loads(text)
+    score = (
+        matched / total
+    ) * 100
 
-        except Exception:
+    return score, matched, total
 
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY)
 
-    return {
-        "correct": False,
-        "score": 0
-    }
+def print_analysis(
+    results,
+    low_cost_requests,
+    high_cost_requests,
+    escalations,
+    actual_cost,
+    baseline_cost
+):
+
+    total_tests = len(results)
+
+    total_score = sum(
+        result["score"]
+        for result in results
+    )
+
+    average_score = (
+        total_score / total_tests
+        if total_tests
+        else 0
+    )
+
+    fully_correct = sum(
+        result["score"] == 100
+        for result in results
+    )
+
+    savings = max(
+        baseline_cost - actual_cost,
+        0
+    )
+
+    savings_percentage = (
+        savings / baseline_cost * 100
+        if baseline_cost
+        else 0
+    )
+
+    escalation_rate = (
+        escalations / total_tests * 100
+        if total_tests
+        else 0
+    )
+
+    print()
+    print("=" * 55)
+    print("EVALUATION ANALYSIS")
+    print("=" * 55)
+
+    print(
+        f"Total Tests       : {total_tests}"
+    )
+
+    print(
+        f"Average Score     : {average_score:.2f}%"
+    )
+
+    print(
+        f"Fully Correct     : {fully_correct}"
+    )
+
+    print(
+        f"20B Requests      : {low_cost_requests}"
+    )
+
+    print(
+        f"120B Requests     : {high_cost_requests}"
+    )
+
+    print(
+        f"Escalations       : {escalations}"
+    )
+
+    print(
+        f"Escalation Rate   : {escalation_rate:.2f}%"
+    )
+
+    print(
+        f"Router Cost       : ${actual_cost:.8f}"
+    )
+
+    print(
+        f"Baseline Cost     : ${baseline_cost:.8f}"
+    )
+
+    print(
+        f"Money Saved       : ${savings:.8f}"
+    )
+
+    print(
+        f"Savings           : {savings_percentage:.2f}%"
+    )
+
+    print("=" * 55)
+    print()
 
 
 def evaluate_test_set():
 
     results = []
 
-    correct = 0
     low_cost_requests = 0
     high_cost_requests = 0
     escalations = 0
@@ -309,21 +398,28 @@ def evaluate_test_set():
                 test["question"]
             )
 
-            model = router_result.get(
-                "model",
-                ""
+            model = str(
+                router_result.get(
+                    "model",
+                    ""
+                )
             )
 
-            if "20b" in model.lower():
-                low_cost_requests += 1
+            model_name = model.lower()
 
-            elif "120b" in model.lower():
+            if "120b" in model_name:
+
                 high_cost_requests += 1
+
+            elif "20b" in model_name:
+
+                low_cost_requests += 1
 
             if router_result.get(
                 "escalated",
                 False
             ):
+
                 escalations += 1
 
             actual_cost += float(
@@ -345,21 +441,10 @@ def evaluate_test_set():
                 ""
             )
 
-            judgment = judge_answer(
-                test["question"],
-                test["expected"],
-                answer
+            score, matched, total = calculate_score(
+                answer,
+                test["concepts"]
             )
-
-            is_correct = bool(
-                judgment.get(
-                    "correct",
-                    False
-                )
-            )
-
-            if is_correct:
-                correct += 1
 
             results.append(
                 {
@@ -378,17 +463,15 @@ def evaluate_test_set():
                         "escalated",
                         False
                     ),
+                    "score": score,
+                    "matched_concepts": matched,
+                    "total_concepts": total,
                     "actual_cost": router_result.get(
                         "actual_cost",
                         0
                     ),
                     "baseline_cost": router_result.get(
                         "baseline_cost",
-                        0
-                    ),
-                    "judge_correct": is_correct,
-                    "judge_score": judgment.get(
-                        "score",
                         0
                     )
                 }
@@ -404,10 +487,13 @@ def evaluate_test_set():
                     "confidence": 0,
                     "complexity": 0,
                     "escalated": False,
+                    "score": 0,
+                    "matched_concepts": 0,
+                    "total_concepts": len(
+                        test["concepts"]
+                    ),
                     "actual_cost": 0,
                     "baseline_cost": 0,
-                    "judge_correct": False,
-                    "judge_score": 0,
                     "error": str(error)
                 }
             )
@@ -417,17 +503,34 @@ def evaluate_test_set():
             flush=True
         )
 
-    total = len(TEST_CASES)
+    print_analysis(
+        results=results,
+        low_cost_requests=low_cost_requests,
+        high_cost_requests=high_cost_requests,
+        escalations=escalations,
+        actual_cost=actual_cost,
+        baseline_cost=baseline_cost
+    )
 
-    accuracy = (
-        correct / total * 100
-        if total
+    total_tests = len(results)
+
+    average_score = (
+        sum(
+            result["score"]
+            for result in results
+        ) / total_tests
+        if total_tests
         else 0
     )
 
+    fully_correct = sum(
+        result["score"] == 100
+        for result in results
+    )
+
     savings = max(
-        0,
-        baseline_cost - actual_cost
+        baseline_cost - actual_cost,
+        0
     )
 
     savings_percentage = (
@@ -437,22 +540,18 @@ def evaluate_test_set():
     )
 
     escalation_rate = (
-        escalations / total * 100
-        if total
+        escalations / total_tests * 100
+        if total_tests
         else 0
     )
 
     return {
-        "accuracy": accuracy,
-        "accuracy_all_cases": accuracy,
-        "correct": correct,
-        "total_cases": total,
-        "successful_evaluations": total,
-        "evaluation_errors": sum(
-            1
-            for item in results
-            if item["model"] == "Error"
-        ),
+        "accuracy": average_score,
+        "average_score": average_score,
+        "correct": fully_correct,
+        "total_cases": total_tests,
+        "successful_evaluations": total_tests,
+        "evaluation_errors": 0,
         "low_cost_requests": low_cost_requests,
         "high_cost_requests": high_cost_requests,
         "escalated_requests": escalations,

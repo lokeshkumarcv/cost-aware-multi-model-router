@@ -6,10 +6,6 @@ from logger import log_request, load_logs
 from evaluator import evaluate_test_set
 
 
-# ============================================================
-# PAGE CONFIG
-# ============================================================
-
 st.set_page_config(
     page_title="Cost-Aware Multi-Model Router",
     page_icon="⚡",
@@ -18,20 +14,15 @@ st.set_page_config(
 )
 
 
-# ============================================================
-# SESSION STATE
-# ============================================================
-
 if "page" not in st.session_state:
     st.session_state.page = "AI Router"
 
 if "result" not in st.session_state:
     st.session_state.result = None
 
+if "evaluation" not in st.session_state:
+    st.session_state.evaluation = None
 
-# ============================================================
-# CUSTOM CSS
-# ============================================================
 
 st.markdown(
     """
@@ -94,10 +85,6 @@ st.markdown(
         font-size: 12px;
         line-height: 1.8;
         opacity: 0.65;
-    }
-
-    textarea {
-        border-radius: 12px !important;
     }
 
     .model-label {
@@ -189,7 +176,7 @@ with st.sidebar:
 
 
 # ============================================================
-# AI ROUTER PAGE
+# AI ROUTER
 # ============================================================
 
 if st.session_state.page == "AI Router":
@@ -212,9 +199,7 @@ if st.session_state.page == "AI Router":
     )
 
     st.markdown(
-        '<div class="section-title">'
-        'Your Request'
-        '</div>',
+        '<div class="section-title">Your Request</div>',
         unsafe_allow_html=True
     )
 
@@ -224,10 +209,6 @@ if st.session_state.page == "AI Router":
         '</div>',
         unsafe_allow_html=True
     )
-
-    # ========================================================
-    # REQUEST FORM
-    # ========================================================
 
     with st.form(
         key="router_form",
@@ -247,10 +228,6 @@ if st.session_state.page == "AI Router":
             type="primary",
             width="stretch"
         )
-
-    # ========================================================
-    # RUN REQUEST
-    # ========================================================
 
     if submitted:
 
@@ -289,10 +266,6 @@ if st.session_state.page == "AI Router":
                     st.error(
                         f"Request failed: {error}"
                     )
-
-    # ========================================================
-    # RESULT
-    # ========================================================
 
     result = st.session_state.result
 
@@ -349,10 +322,6 @@ if st.session_state.page == "AI Router":
             )
         )
 
-        # ====================================================
-        # MODEL
-        # ====================================================
-
         st.markdown(
             '<div class="model-label">'
             'MODEL USED'
@@ -379,10 +348,6 @@ if st.session_state.page == "AI Router":
                 '</div>',
                 unsafe_allow_html=True
             )
-
-        # ====================================================
-        # ROUTING METRICS
-        # ====================================================
 
         c1, c2, c3, c4 = st.columns(4)
 
@@ -414,10 +379,6 @@ if st.session_state.page == "AI Router":
                 f"{savings:.1f}%"
             )
 
-        # ====================================================
-        # ROUTING STATUS
-        # ====================================================
-
         if escalated:
 
             reason = result.get(
@@ -438,7 +399,7 @@ if st.session_state.page == "AI Router":
 
         # ====================================================
         # TOKEN USAGE
-        # ========================================================
+        # ====================================================
 
         st.markdown(
             '<div class="section-title">'
@@ -544,10 +505,6 @@ elif st.session_state.page == "Dashboard":
         unsafe_allow_html=True
     )
 
-    # ========================================================
-    # LOAD LOGS
-    # ========================================================
-
     try:
 
         logs = load_logs()
@@ -565,10 +522,6 @@ elif st.session_state.page == "Dashboard":
     else:
 
         df = pd.DataFrame(logs)
-
-        # ====================================================
-        # NUMERIC COLUMNS
-        # ====================================================
 
         numeric_columns = [
             "actual_cost",
@@ -590,10 +543,6 @@ elif st.session_state.page == "Dashboard":
                     df[column],
                     errors="coerce"
                 ).fillna(0)
-
-        # ====================================================
-        # MODEL COUNTS
-        # ====================================================
 
         if "model" in df.columns:
 
@@ -625,47 +574,34 @@ elif st.session_state.page == "Dashboard":
             requests_120b
         )
 
-        # ====================================================
-        # COST
-        # ====================================================
-
-        if "actual_cost" in df.columns:
-
-            router_cost = float(
+        router_cost = (
+            float(
                 df["actual_cost"].sum()
             )
+            if "actual_cost" in df.columns
+            else 0.0
+        )
 
-        else:
-
-            router_cost = 0.0
-
-        if "baseline_cost" in df.columns:
-
-            always_120b_cost = float(
+        baseline_cost = (
+            float(
                 df["baseline_cost"].sum()
             )
-
-        else:
-
-            always_120b_cost = 0.0
+            if "baseline_cost" in df.columns
+            else 0.0
+        )
 
         money_saved = max(
-            always_120b_cost -
-            router_cost,
+            baseline_cost - router_cost,
             0
         )
 
-        if always_120b_cost > 0:
-
-            savings_percentage = (
-                money_saved /
-                always_120b_cost *
-                100
-            )
-
-        else:
-
-            savings_percentage = 0.0
+        savings_percentage = (
+            money_saved /
+            baseline_cost *
+            100
+            if baseline_cost
+            else 0.0
+        )
 
         # ====================================================
         # PERFORMANCE OVERVIEW
@@ -987,237 +923,243 @@ elif st.session_state.page == "Dashboard":
 
                 evaluation = evaluate_test_set()
 
+                st.session_state.evaluation = evaluation
+
                 st.success(
                     "Evaluation completed successfully."
                 )
-
-                # =================================================
-                # EVALUATION SUMMARY
-                # =================================================
-
-                e1, e2, e3, e4 = st.columns(4)
-
-                with e1:
-
-                    st.metric(
-                        "Accuracy",
-                        f"{evaluation['accuracy']:.1f}%"
-                    )
-
-                with e2:
-
-                    st.metric(
-                        "Test Cases",
-                        evaluation["total_cases"]
-                    )
-
-                with e3:
-
-                    st.metric(
-                        "Router Cost",
-                        f"${evaluation['actual_cost']:.6f}"
-                    )
-
-                with e4:
-
-                    st.metric(
-                        "Savings",
-                        f"{evaluation['savings_percentage']:.1f}%"
-                    )
-
-                # =================================================
-                # MODEL USAGE SUMMARY
-                # =================================================
-
-                st.markdown(
-                    '<div class="section-title">'
-                    'Evaluation Model Usage'
-                    '</div>',
-                    unsafe_allow_html=True
-                )
-
-                eval1, eval2, eval3 = st.columns(3)
-
-                with eval1:
-
-                    st.metric(
-                        "GPT-OSS 20B",
-                        evaluation[
-                            "low_cost_requests"
-                        ]
-                    )
-
-                with eval2:
-
-                    st.metric(
-                        "GPT-OSS 120B",
-                        evaluation[
-                            "high_cost_requests"
-                        ]
-                    )
-
-                with eval3:
-
-                    st.metric(
-                        "Escalations",
-                        evaluation[
-                            "escalated_requests"
-                        ]
-                    )
-
-                # =================================================
-                # TEST RESULTS TABLE
-                # =================================================
-
-                st.markdown(
-                    '<div class="section-title">'
-                    'Test Results'
-                    '</div>',
-                    unsafe_allow_html=True
-                )
-
-                evaluation_results = evaluation.get(
-                    "results",
-                    []
-                )
-
-                if evaluation_results:
-
-                    results_df = pd.DataFrame(
-                        evaluation_results
-                    )
-
-                    table_columns = [
-                        "case",
-                        "question",
-                        "model",
-                        "escalated",
-                        "complexity",
-                        "confidence"
-                    ]
-
-                    available_columns = [
-                        column
-                        for column in table_columns
-                        if column in results_df.columns
-                    ]
-
-                    results_table = (
-                        results_df[
-                            available_columns
-                        ]
-                        .copy()
-                    )
-
-                    results_table = results_table.rename(
-                        columns={
-                            "case": "Test",
-                            "question": "Question",
-                            "model": "Model Used",
-                            "escalated": "Escalated",
-                            "complexity": "Complexity",
-                            "confidence": "Confidence"
-                        }
-                    )
-
-                    if "Model Used" in results_table.columns:
-
-                        results_table["Model Used"] = (
-                            results_table["Model Used"]
-                            .astype(str)
-                            .replace(
-                                {
-                                    "openai/gpt-oss-20b":
-                                        "GPT-OSS 20B",
-                                    "openai/gpt-oss-120b":
-                                        "GPT-OSS 120B"
-                                }
-                            )
-                        )
-
-                    if "Escalated" in results_table.columns:
-
-                        results_table["Escalated"] = (
-                            results_table["Escalated"]
-                            .map(
-                                lambda value:
-                                "Yes"
-                                if bool(value)
-                                else "No"
-                            )
-                        )
-
-                    if "Complexity" in results_table.columns:
-
-                        results_table["Complexity"] = (
-                            pd.to_numeric(
-                                results_table["Complexity"],
-                                errors="coerce"
-                            )
-                            .fillna(0)
-                            .map(
-                                lambda value:
-                                f"{value:.2f}"
-                            )
-                        )
-
-                    if "Confidence" in results_table.columns:
-
-                        results_table["Confidence"] = (
-                            pd.to_numeric(
-                                results_table["Confidence"],
-                                errors="coerce"
-                            )
-                            .fillna(0)
-                            .map(
-                                lambda value:
-                                f"{value:.0%}"
-                            )
-                        )
-
-                    st.dataframe(
-                        results_table,
-                        width="stretch",
-                        hide_index=True,
-                        column_config={
-                            "Test": st.column_config.NumberColumn(
-                                "Test",
-                                width="small"
-                            ),
-                            "Question": st.column_config.TextColumn(
-                                "Question",
-                                width="large"
-                            ),
-                            "Model Used": st.column_config.TextColumn(
-                                "Model Used",
-                                width="medium"
-                            ),
-                            "Escalated": st.column_config.TextColumn(
-                                "Escalated",
-                                width="small"
-                            ),
-                            "Complexity": st.column_config.TextColumn(
-                                "Complexity",
-                                width="small"
-                            ),
-                            "Confidence": st.column_config.TextColumn(
-                                "Confidence",
-                                width="small"
-                            )
-                        }
-                    )
-
-                else:
-
-                    st.info(
-                        "No test results are available."
-                    )
 
             except Exception as error:
 
                 st.error(
                     f"Evaluation failed: {error}"
                 )
+
+    evaluation = st.session_state.evaluation
+
+    if evaluation:
+
+        # ====================================================
+        # EVALUATION SUMMARY
+        # ====================================================
+
+        e1, e2, e3, e4 = st.columns(4)
+
+        with e1:
+
+            st.metric(
+                "Evaluation Score",
+                f"{evaluation['accuracy']:.1f}%"
+            )
+
+        with e2:
+
+            st.metric(
+                "Test Cases",
+                evaluation["total_cases"]
+            )
+
+        with e3:
+
+            st.metric(
+                "Router Cost",
+                f"${evaluation['actual_cost']:.6f}"
+            )
+
+        with e4:
+
+            st.metric(
+                "Savings",
+                f"{evaluation['savings_percentage']:.1f}%"
+            )
+
+        # ====================================================
+        # MODEL USAGE
+        # ====================================================
+
+        st.markdown(
+            '<div class="section-title">'
+            'Evaluation Model Usage'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+        eval1, eval2, eval3 = st.columns(3)
+
+        with eval1:
+
+            st.metric(
+                "GPT-OSS 20B",
+                evaluation[
+                    "low_cost_requests"
+                ]
+            )
+
+        with eval2:
+
+            st.metric(
+                "GPT-OSS 120B",
+                evaluation[
+                    "high_cost_requests"
+                ]
+            )
+
+        with eval3:
+
+            st.metric(
+                "Escalations",
+                evaluation[
+                    "escalated_requests"
+                ]
+            )
+
+        # ====================================================
+        # TEST RESULTS
+        # ====================================================
+
+        st.markdown(
+            '<div class="section-title">'
+            'Test Results'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+        evaluation_results = evaluation.get(
+            "results",
+            []
+        )
+
+        if evaluation_results:
+
+            results_df = pd.DataFrame(
+                evaluation_results
+            )
+
+            table_columns = [
+                "case",
+                "question",
+                "model",
+                "escalated",
+                "complexity",
+                "confidence"
+            ]
+
+            available_columns = [
+                column
+                for column in table_columns
+                if column in results_df.columns
+            ]
+
+            results_table = (
+                results_df[
+                    available_columns
+                ]
+                .copy()
+            )
+
+            results_table = results_table.rename(
+                columns={
+                    "case": "Test",
+                    "question": "Question",
+                    "model": "Model Used",
+                    "escalated": "Escalated",
+                    "complexity": "Complexity",
+                    "confidence": "Confidence"
+                }
+            )
+
+            if "Model Used" in results_table.columns:
+
+                results_table["Model Used"] = (
+                    results_table["Model Used"]
+                    .astype(str)
+                    .replace(
+                        {
+                            "openai/gpt-oss-20b":
+                                "GPT-OSS 20B",
+                            "openai/gpt-oss-120b":
+                                "GPT-OSS 120B"
+                        }
+                    )
+                )
+
+            if "Escalated" in results_table.columns:
+
+                results_table["Escalated"] = (
+                    results_table["Escalated"]
+                    .map(
+                        lambda value:
+                        "Yes"
+                        if bool(value)
+                        else "No"
+                    )
+                )
+
+            if "Complexity" in results_table.columns:
+
+                results_table["Complexity"] = (
+                    pd.to_numeric(
+                        results_table["Complexity"],
+                        errors="coerce"
+                    )
+                    .fillna(0)
+                    .map(
+                        lambda value:
+                        f"{value:.2f}"
+                    )
+                )
+
+            if "Confidence" in results_table.columns:
+
+                results_table["Confidence"] = (
+                    pd.to_numeric(
+                        results_table["Confidence"],
+                        errors="coerce"
+                    )
+                    .fillna(0)
+                    .map(
+                        lambda value:
+                        f"{value:.0%}"
+                    )
+                )
+
+            st.dataframe(
+                results_table,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "Test": st.column_config.NumberColumn(
+                        "Test",
+                        width="small"
+                    ),
+                    "Question": st.column_config.TextColumn(
+                        "Question",
+                        width="large"
+                    ),
+                    "Model Used": st.column_config.TextColumn(
+                        "Model Used",
+                        width="medium"
+                    ),
+                    "Escalated": st.column_config.TextColumn(
+                        "Escalated",
+                        width="small"
+                    ),
+                    "Complexity": st.column_config.TextColumn(
+                        "Complexity",
+                        width="small"
+                    ),
+                    "Confidence": st.column_config.TextColumn(
+                        "Confidence",
+                        width="small"
+                    )
+                }
+            )
+
+        else:
+
+            st.info(
+                "No test results are available."
+            )
 
 
 # ============================================================
